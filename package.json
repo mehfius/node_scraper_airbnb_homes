@@ -1,0 +1,14 @@
+{
+  "name": "node_scraper_airbnb_homes",
+  "version": "1.0.0",
+  "description": "API para obter anúncios do Airbnb via web scraping.",
+  "main": "index.js",
+  "scripts": {
+    "start": "node index.js"
+  },
+  "dependencies": {
+    "date-fns": "^4.1.0",
+    "express": "^5.1.0",
+    "puppeteer": "^24.10.0"
+  }
+}
