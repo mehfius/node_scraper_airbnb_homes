@@ -1,0 +1,56 @@
+{
+  "info": {
+    "_postman_id": "b1e2c3d4-5678-1234-9abc-def012345678",
+    "name": "Airbnb Scraper API",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "item": [
+    {
+      "name": "Scrape Airbnb Listings (localhost)",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"airbnbUrl\": \"https://www.airbnb.com/s/Paris--France/homes\",\n  \"page\": 0\n}"
+        },
+        "url": {
+          "raw": "http://localhost:3000/scrape",
+          "protocol": "http",
+          "host": ["localhost"],
+          "port": "3000",
+          "path": ["scrape"]
+        }
+      },
+      "response": []
+    },
+    {
+      "name": "Scrape Airbnb Listings (ngrok)",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"airbnbUrl\": \"https://www.airbnb.com/s/Paris--France/homes\",\n  \"page\": 0\n}"
+        },
+        "url": {
+          "raw": "https://fleet-glowing-herring.ngrok-free.app/scrape",
+          "protocol": "https",
+          "host": ["fleet-glowing-herring","ngrok-free","app"],
+          "path": ["scrape"]
+        }
+      },
+      "response": []
+    }
+  ]
+}

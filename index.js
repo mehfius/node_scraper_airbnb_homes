@@ -41,6 +41,14 @@ async function getAirbnbListingDetails(airbnbUrl) {
             const data = [];
             const roomIdRegex = /\/rooms\/(\d+)\?/;
 
+            // Extract the 'avaliables' field from the h1 span
+            let avaliables = null;
+            const avaliablesElement = document.querySelector('h1 span:nth-child(2)');
+            if (avaliablesElement) {
+                const numberMatch = avaliablesElement.textContent.trim().match(/\d+/g);
+                avaliables = numberMatch ? parseInt(numberMatch[0], 10) : 1000;
+            }
+
             elements.forEach(el => {
                 let name = null;
                 let roomId = null;
@@ -121,7 +129,8 @@ async function getAirbnbListingDetails(airbnbUrl) {
                         roomId,
                         total_reviews: totalReviews,
                         score,
-                        price
+                        price,
+                        avaliables // Added the new 'avaliables' attribute here
                     });
                 }
             });
@@ -165,6 +174,7 @@ async function scrapeAirbnbPage(baseAirbnbUrl, pageNumber) {
         total_reviews: item.total_reviews,
         score: item.score,
         price: item.price,
+        avaliables: item.avaliables, // Ensure 'avaliables' is included in the formatted data
         position: pageNumber * 18 + index + 1
     }));
 
