@@ -1,0 +1,10 @@
+
+//96
+
+// Mais de 1000 espaços
+
+// Nenhuma estadia
+
+export AIRBNB_TEST_URL_1="https://www.airbnb.com.br/s/Cabo-Frio/homes?flexible_trip_lengths%5B%5D=one_week&monthly_start_date=2025-07-01&monthly_length=3&monthly_end_date=2025-10-01&refinement_paths%5B%5D=%2Fhomes&place_id=ChIJ1WYFPD0HlwARZ63FIErzFVE&date_picker_type=calendar&checkin=2025-07-18&checkout=2025-07-22&adults=12&source=structured_search_input_header&search_type=filter_change&query=Cabo%20Frio&search_mode=regular_search&price_filter_input_type=2&price_filter_num_nights=4&channel=EXPLORE&price_min=455&selected_filter_order%5B%5D=price_min%3A455&selected_filter_order%5B%5D=price_max%3A2122&selected_filter_order%5B%5D=room_types%3AEntire%20home%2Fapt&update_selected_filters=false&price_max=2122&room_types%5B%5D=Entire%20home%2Fapt"
+export AIRBNB_TEST_URL_2="https://www.airbnb.com.br/s/Cabo-Frio/homes?flexible_trip_lengths%5B%5D=one_week&monthly_start_date=2025-07-01&monthly_length=3&monthly_end_date=2025-10-01&refinement_paths%5B%5D=%2Fhomes&place_id=ChIJ1WYFPD0HlwARZ63FIErzFVE&date_picker_type=calendar&checkin=2025-07-18&checkout=2025-07-22&adults=6&source=structured_search_input_header&search_type=AUTOSUGGEST"
+export AIRBNB_TEST_URL_3="https://www.airbnb.com.br/s/Taperapuan--Porto-Seguro-~-BA/homes?place_id=ChIJy4NfZ_CUNgcRDTc6vgv51Vw&refinement_paths%5B%5D=%2Fhomes&checkin=2025-07-24&checkout=2025-07-28&adults=12&guests=12&search_type=unknown&query=Taperapuan%2C%20Porto%20Seguro%20-%20BA&parent_city_place_id=ChIJUVkU-rNsBwcR8bVlDBlDvZ0&flexible_trip_lengths%5B%5D=one_week&monthly_start_date=2025-07-01&monthly_length=3&monthly_end_date=2025-10-01&search_mode=regular_search&price_filter_input_type=2&price_filter_num_nights=4&channel=EXPLORE&price_max=1271&selected_filter_order%5B%5D=price_max%3A1271&update_selected_filters=true&date_picker_type=calendar&source=structured_search_input_header"

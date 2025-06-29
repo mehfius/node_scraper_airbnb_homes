@@ -7,10 +7,11 @@
     "start": "node index.js",
     "docker:build": "docker build -t mehfius/scrapebnb-homes --no-cache .",
     "docker:push": "docker push mehfius/scrapebnb-homes",
-    "docker:release": "npm run docker:build && npm run docker:push"    
+    "docker:release": "npm run docker:build && npm run docker:push"
   },
   "dependencies": {
     "date-fns": "^4.1.0",
+    "dotenv": "^17.0.0",
     "express": "^5.1.0",
     "puppeteer": "^24.10.0"
   }

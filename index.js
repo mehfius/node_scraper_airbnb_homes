@@ -1,203 +1,222 @@
 const puppeteer = require('puppeteer');
-const express = require('express');
 
-const app = express();
-const port = 3000;
+/**
+ * Valida se a data de check-in na URL é igual ou posterior a amanhã.
+ * @param {string} airbnbUrl - A URL do Airbnb a ser validada.
+ * @returns {boolean} - Retorna true se a data for válida, senão false.
+ */
+function validateCheckinDate(airbnbUrl) {
+    try {
+        const url = new URL(airbnbUrl);
+        const checkinDateStr = url.searchParams.get('checkin');
 
-app.use(express.json());
+        if (!checkinDateStr) {
+            console.error('Erro: O parâmetro "checkin" não foi encontrado na URL.');
+            return false;
+        }
+
+        const today = new Date();
+        today.setHours(0, 0, 0, 0);
+
+        const tomorrow = new Date(today);
+        tomorrow.setDate(today.getDate() + 1);
+
+        const checkinDate = new Date(`${checkinDateStr}T00:00:00`);
+
+        if (isNaN(checkinDate.getTime())) {
+            console.error(`Erro: Formato de data de check-in inválido: "${checkinDateStr}". Use o formato AAAA-MM-DD.`);
+            return false;
+        }
+
+        if (checkinDate < tomorrow) {
+            const formatDate = (date) => date.toISOString().split('T')[0];
+            console.error(`Erro: A data de check-in (${formatDate(checkinDate)}) deve ser igual ou posterior a amanhã (${formatDate(tomorrow)}).`);
+            return false;
+        }
+
+        console.log(`Data de check-in (${checkinDate.toISOString().split('T')[0]}) é válida.`);
+        return true;
+    } catch (error) {
+        console.error('Erro ao processar a URL. Verifique se ela está no formato correto.', error);
+        return false;
+    }
+}
+
 
 async function getAirbnbListingDetails(airbnbUrl) {
     let browser;
     try {
         browser = await puppeteer.launch({
-            headless: 'new',
-            args: [ '--no-sandbox', '--disable-setuid-sandbox', '--disable-web-security', '--disable-gpu', '--enable-logging', '--disable-dev-shm-usage', '--incognito']
+            headless: "new",
+            args: ['--no-sandbox', '--disable-setuid-sandbox', '--disable-web-security', '--disable-gpu', '--disable-dev-shm-usage']
         });
         const page = await browser.newPage();
         await page.setUserAgent('Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36');
         await page.setViewport({ width: 1440, height: 900 });
 
-        await page.goto(airbnbUrl, { waitUntil: 'domcontentloaded', timeout: 90000 });
+        await page.goto(airbnbUrl, { waitUntil: 'domcontentloaded', timeout: 60000 });
+        console.log('Página carregada (domcontentloaded).');
 
-        const itemSelector = 'div[itemprop="itemListElement"]';
-        const expectedMinCount = 18; // Número mínimo esperado de anúncios para considerar a página carregada
+        const accommodationListingSelector = 'div[itemprop="itemListElement"]';
+        const noResultsSelector = 'main div div div div div div div div div div section h1';
+        
+        console.log('Aguardando pela resposta inicial da página (lista ou "nenhum resultado")...');
 
-        try {
-            // Espera até que um número mínimo de elementos de listagem seja carregado
-            await page.waitForFunction(
-                (selector, expectedCount) => {
-                    return document.querySelectorAll(selector).length >= expectedCount;
-                },
-                { timeout: 60000, polling: 'raf' }, // Timeout de 60 segundos, polling via requestAnimationFrame
-                itemSelector,
-                expectedMinCount
-            );
-        } catch (waitError) {
-            console.warn(`Aviso: Não foi possível encontrar o número mínimo esperado de elementos da lista '${itemSelector}' após 60 segundos. Pode indicar que a página não carregou completamente ou que o seletor está desatualizado. Erro: ${waitError.message}`);
+        await page.waitForFunction(
+            (listSelector, noResultsSel) => {
+                return document.querySelector(listSelector) || document.querySelector(noResultsSel);
+            },
+            { timeout: 30000 },
+            accommodationListingSelector,
+            noResultsSelector
+        );
+
+        const noResultsElement = await page.$(noResultsSelector);
+        if (noResultsElement) {
+            const noResultsText = await page.evaluate(el => el.textContent.trim(), noResultsElement);
+            console.log(`Nenhuma acomodação encontrada. Mensagem: "${noResultsText}". Encerrando a raspagem.`);
+            return {
+                availableAccommodationsCount: 0,
+                elementText: noResultsText,
+                loadedListingsCount: 0,
+                accommodations: []
+            };
         }
+        
+        console.log('Resposta inicial recebida. Verificando o total de acomodações...');
 
-        const listings = await page.evaluate((selector) => {
-            const elements = document.querySelectorAll(selector);
-            const data = [];
-            const roomIdRegex = /\/rooms\/(\d+)\?/;
-
-            // Extract the 'avaliables' field from the h1 span
-            let avaliables = null;
-            const avaliablesElement = document.querySelector('h1 span:nth-child(2)');
-            if (avaliablesElement) {
-                const numberMatch = avaliablesElement.textContent.trim().match(/\d+/g);
-                avaliables = numberMatch ? parseInt(numberMatch[0], 10) : 1000;
-            }
-
-            elements.forEach(el => {
-                let name = null;
-                let roomId = null;
-                let totalReviews = null;
-                let score = null;
-                let price = null;
-
-                const nameMeta = el.querySelector('meta[itemprop="name"]');
-                if (nameMeta) {
-                    name = nameMeta.getAttribute('content');
-                }
-
-                const urlMeta = el.querySelector('meta[itemprop="url"]');
-                if (urlMeta) {
-                    const fullUrl = urlMeta.getAttribute('content');
-                    const match = fullUrl.match(roomIdRegex);
-                    if (match && match[1]) {
-                        roomId = match[1];
-                    }
-                }
-
-                const targetSvg = el.querySelector('svg:has(path[fill-rule="evenodd"])');
-                if (targetSvg) {
-                    const immediateParentSpan = targetSvg.parentNode;
-                    if (immediateParentSpan) {
-                        const grandParentSpan = immediateParentSpan.parentNode;
-                        if (grandParentSpan) {
-                            const ratingSpan = grandParentSpan.querySelector(':scope > span:last-child');
-                            if (ratingSpan) {
-                                const textContent = ratingSpan.textContent.trim();
-                                const match = textContent.match(/(\d+,\d+)\s*\((\d+)\)/);
-                                if (match) {
-                                    score = parseFloat(match[1].replace(',', '.'));
-                                    totalReviews = parseInt(match[2], 10);
-                                }
-                            }
-                        }
-                    }
-                } else {
-                    const scoreSpan = el.querySelector('span[aria-label^="Avaliação média de"]');
-                    if (scoreSpan) {
-                        const scoreText = scoreSpan.getAttribute('aria-label');
-                        const scoreValMatch = scoreText.match(/(\d+(\.\d+)?)/);
-                        if (scoreValMatch) {
-                            score = parseFloat(scoreValMatch[1]);
-                        }
-                    }
-                    const reviewsTextSpan = el.querySelector('span.r1dxs1cn'); 
-                    if (reviewsTextSpan) {
-                        const reviewsText = reviewsTextSpan.textContent;
-                        const totalReviewsMatch = reviewsText.match(/\((\d+)\)/);
-                        if (totalReviewsMatch) {
-                            totalReviews = parseInt(totalReviewsMatch[1], 10);
-                        }
-                    }
-                }
-                
-                let rawPriceText = null;
-                const priceElement = el.querySelector('div._tt122r span._tyxjp1'); 
-                if (priceElement) {
-                    rawPriceText = priceElement.textContent;
-                } else {
-                    const buttons = el.querySelectorAll('button[type="button"]');
-                    buttons.forEach(button => {
-                        const priceSpan = Array.from(button.querySelectorAll('span')).find(span => span.textContent.trim().startsWith('R$'));
-                        if (priceSpan) {
-                            rawPriceText = priceSpan.textContent.trim();
-                        }
-                    });
-                }
-                if (rawPriceText) {
-                    price = parseFloat(rawPriceText.replace('R$', '').replace(/\./g, '').replace(',', '.'));
-                }
-
-                if (name || roomId) {
-                    data.push({
-                        name,
-                        roomId,
-                        total_reviews: totalReviews,
-                        score,
-                        price,
-                        avaliables // Added the new 'avaliables' attribute here
-                    });
-                }
-            });
-            return data;
-        }, itemSelector);
-
-        return listings;
-    } catch (error) {
-        console.error(`Erro ao obter detalhes da listagem do Airbnb: ${error.message}`);
-        return null;
-    } finally {
-        if (browser) {
-            await browser.close();
-        }
-    }
-}
-
-async function scrapeAirbnbPage(baseAirbnbUrl, pageNumber) {
-    let airbnbUrl = baseAirbnbUrl;
-
-    if (pageNumber > 0) {
-        const offset = 18 * pageNumber;
-        const cursorObject = {
-            section_offset: 0,
-            items_offset: offset,
-            version: 1
+        const availableCountSelector = 'h1 span:nth-child(2)';
+        let result = {
+            availableAccommodationsCount: null,
+            elementText: 'Erro: Seletor de contagem de disponíveis não encontrado.',
+            loadedListingsCount: 0,
+            accommodations: []
         };
-        const cursor = Buffer.from(JSON.stringify(cursorObject)).toString('base64');
-        airbnbUrl = `${baseAirbnbUrl}&cursor=${encodeURIComponent(cursor)}`;
-    }
+        
+        try {
+            await page.waitForSelector(availableCountSelector, { timeout: 15000 });
+            console.log(`Seletor de contagem de disponíveis "${availableCountSelector}" encontrado.`);
 
-    const scrapedData = await getAirbnbListingDetails(airbnbUrl);
+            const headerData = await page.evaluate((sel) => {
+                let availableAccommodationsCount = null;
+                let elementText = null;
+                const availableElement = document.querySelector(sel);
+                if (availableElement) {
+                    elementText = availableElement.textContent.trim();
+                    if (elementText.toLowerCase().includes('over 1,000') || elementText.toLowerCase().includes('mais de 1.000') || elementText.toLowerCase().includes('mil')) {
+                        availableAccommodationsCount = 1000;
+                    } else {
+                        const numberMatch = elementText.match(/\d[\d,.]*/);
+                        if (numberMatch) {
+                            availableAccommodationsCount = parseInt(numberMatch[0].replace(/[^0-9]/g, ''), 10);
+                        } else {
+                            availableAccommodationsCount = null;
+                        }
+                    }
+                }
+                return { availableAccommodationsCount, elementText };
+            }, availableCountSelector);
 
-    if (!scrapedData || scrapedData.length === 0) {
-        return { data: [], requestedPageUrl: airbnbUrl };
-    }
+            result.availableAccommodationsCount = headerData.availableAccommodationsCount;
+            result.elementText = headerData.elementText;
+            console.log(`Texto encontrado para contagem de disponíveis: "${result.elementText}"`);
 
-    const formattedData = scrapedData.map((item, index) => ({
-        room_id: item.roomId,
-        title: item.name,
-        total_reviews: item.total_reviews,
-        score: item.score,
-        price: item.price,
-        avaliables: item.avaliables, // Ensure 'avaliables' is included in the formatted data
-        position: pageNumber * 18 + index + 1
-    }));
-
-    return { data: formattedData, requestedPageUrl: airbnbUrl };
-}
-
-app.post('/scrape', async (req, res) => {
-    try {
-        const page = req.body.page || 0;
-        const airbnbUrl = req.body.airbnbUrl;
-
-        if (!airbnbUrl) {
-            return res.status(400).json({ error: 'A URL do Airbnb é obrigatória no corpo da requisição.' });
+        } catch (selectorError) {
+            console.error(`Erro: Seletor de contagem de disponíveis "${availableCountSelector}" não encontrado. Detalhes: ${selectorError.message}`);
+            return result;
         }
 
-        const result = await scrapeAirbnbPage(airbnbUrl, page);
-        res.json(result);
-    } catch (error) {
-        console.error(`Erro na rota /scrape: ${error.message}`);
-        res.status(500).json({ error: 'Erro interno do servidor ao processar a requisição.' });
-    }
-});
+        // --- INÍCIO DA MODIFICAÇÃO: Aguardar o carregamento completo da página ---
+        if (result.availableAccommodationsCount > 0) {
+            const expectedCountOnPage = Math.min(result.availableAccommodationsCount, 18);
+            console.log(`Total de ${result.availableAccommodationsCount} acomodações. Aguardando carregar ${expectedCountOnPage} na página...`);
+            await page.waitForFunction(
+                (selector, count) => document.querySelectorAll(selector).length >= count,
+                { timeout: 20000 }, // Timeout para os itens carregarem
+                accommodationListingSelector,
+                expectedCountOnPage
+            );
+            console.log(`${expectedCountOnPage} acomodações carregadas.`);
+        }
+        // --- FIM DA MODIFICAÇÃO ---
 
-app.listen(port, () => {
-    console.log(`Servidor rodando em http://localhost:${port}`);
-});
+        const listingDetails = await page.evaluate((selector) => {
+            const listings = document.querySelectorAll(selector);
+            const accommodations = [];
+            listings.forEach(listing => {
+                const titleMeta = listing.querySelector('meta[itemprop="name"]');
+                const title = titleMeta?.getAttribute('content') ?? 'Título não encontrado';
+
+                let price = 'Preço não encontrado';
+                const priceButtons = listing.querySelectorAll('button[type="button"]');
+                if (priceButtons && priceButtons.length > 3) {
+                    const priceElement = priceButtons[3];
+                    if (priceElement) {
+                       price = priceElement.querySelectorAll('span')[0].textContent.trim();
+                    }
+                }
+
+                accommodations.push({ title, price });
+            });
+            return {
+                count: listings.length,
+                accommodations: accommodations
+            };
+        }, accommodationListingSelector);
+
+        console.log(`Número de acomodações listadas encontradas na tela: ${listingDetails.count}`);
+        result.loadedListingsCount = listingDetails.count;
+        result.accommodations = listingDetails.accommodations;
+
+        return result;
+    } catch (error) {
+        console.error(`Erro inesperado ao obter os detalhes de acomodações disponíveis: ${error.message}`);
+        return {
+            availableAccommodationsCount: 0,
+            elementText: `Erro geral: ${error.message}`,
+            loadedListingsCount: 0,
+            accommodations: []
+        };
+    } finally {
+        if (browser) await browser.close();
+    }
+}
+
+async function scrapeAirbnbPage(airbnbUrl) {
+    const result = await getAirbnbListingDetails(airbnbUrl);
+    return result;
+}
+
+(async () => {
+    const airbnbUrl = process.env.AIRBNB_TEST_URL_2;
+
+    if (!airbnbUrl) {
+        console.error('Erro: A variável de ambiente AIRBNB_URL não está definida.');
+        process.exit(1);
+    }
+
+    if (!validateCheckinDate(airbnbUrl)) {
+        process.exit(1);
+    }
+
+    console.log(`Iniciando a raspagem...`);
+    try {
+        const result = await scrapeAirbnbPage(airbnbUrl);
+
+        console.log('\n--- Resultado Final ---');
+        console.log('Texto do elemento principal:', result.elementText);
+
+        if (result.loadedListingsCount > 0) {
+            console.log('Número total de acomodações disponíveis (do cabeçalho):', result.availableAccommodationsCount);
+            console.log('Número exato de acomodações carregadas na página:', result.loadedListingsCount);
+            console.log('Acomodações encontradas (título e preço):');
+            console.log(result.accommodations);
+        } else {
+            console.log('Nenhuma acomodação foi carregada ou encontrada para a busca realizada.');
+        }
+        console.log('---------------------\n');
+
+    } catch (error) {
+        console.error(`Erro durante a execução principal: ${error.message}`);
+    }
+})();
